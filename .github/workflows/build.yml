@@ -26,29 +26,42 @@ jobs:
           mv lib_backup lib
           flutter pub add just_audio file_picker
 
-      - name: Fix iOS Target and Permissions
+      - name: Prepare iOS Config and Pods
         run: |
-          # Поднимаем минимальную версию iOS до 13.0 для just_audio
+          # 1. Заставляем Flutter сгенерировать Podfile и связать зависимости
+          flutter build ios --config-only --no-codesign
+
+          # 2. Повышаем версию iOS до 13.0 для работы аудиобиблиотек
           sed -i '' "s/# platform :ios, '12.0'/platform :ios, '13.0'/g" ios/Podfile || true
           sed -i '' "s/platform :ios, '12.0'/platform :ios, '13.0'/g" ios/Podfile || true
-          
-          # Фоновое воспроизведение
-          plutil -insert UIBackgroundModes -xml "<array><string>audio</string></array>" ios/Runner/Info.plist || true
 
-      - name: Install CocoaPods
-        run: |
+          # 3. Обновляем поды (теперь Podfile точно на месте)
           cd ios
-          pod install --repo-update
+          pod install
           cd ..
 
-      - name: Build iOS Application
+          # 4. Включаем фоновый звук
+          plutil -insert UIBackgroundModes -xml "<array><string>audio</string></array>" ios/Runner/Info.plist || true
+
+      - name: Build Application (Xcode)
         run: |
-          flutter build ios --release --no-codesign
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios_derived \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
 
       - name: Package into IPA
         run: |
+          APP_PATH=$(find build -name "Runner.app" -type d | head -n 1)
+          echo "Found app at: $APP_PATH"
           mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
+          cp -r "$APP_PATH" Payload/
           zip -r PixelPlayer.ipa Payload
 
       - name: Upload IPA Artifact
