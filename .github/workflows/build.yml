@@ -18,17 +18,28 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Scaffolding and Dependencies
+      - name: Scaffolding project
         run: |
           mv lib lib_backup
-          flutter create --platforms=ios --project-name pixel_player .
+          flutter create --platforms=ios --org com.pixelplayer --project-name pixel_player .
           rm -rf lib
           mv lib_backup lib
           flutter pub add just_audio file_picker
 
-      - name: Enable Background Audio
+      - name: Fix iOS Target and Permissions
         run: |
-          plutil -insert UIBackgroundModes -xml "<array><string>audio</string></array>" ios/Runner/Info.plist
+          # Поднимаем минимальную версию iOS до 13.0 для just_audio
+          sed -i '' "s/# platform :ios, '12.0'/platform :ios, '13.0'/g" ios/Podfile || true
+          sed -i '' "s/platform :ios, '12.0'/platform :ios, '13.0'/g" ios/Podfile || true
+          
+          # Фоновое воспроизведение
+          plutil -insert UIBackgroundModes -xml "<array><string>audio</string></array>" ios/Runner/Info.plist || true
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+          cd ..
 
       - name: Build iOS Application
         run: |
