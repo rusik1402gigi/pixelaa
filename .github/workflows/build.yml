@@ -1,0 +1,47 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Scaffolding and Dependencies
+        run: |
+          mv lib lib_backup
+          flutter create --platforms=ios --project-name pixel_player .
+          rm -rf lib
+          mv lib_backup lib
+          flutter pub add just_audio file_picker
+
+      - name: Enable Background Audio
+        run: |
+          plutil -insert UIBackgroundModes -xml "<array><string>audio</string></array>" ios/Runner/Info.plist
+
+      - name: Build iOS Application
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package into IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r PixelPlayer.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixelPlayer-IPA
+          path: PixelPlayer.ipa
